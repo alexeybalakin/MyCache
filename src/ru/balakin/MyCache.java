@@ -1,11 +1,13 @@
 package ru.balakin;
 
-
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-public class MyCache<K, V> {
-    private Map<K, CacheElement<K, V>> cache =  new HashMap<>();
+public class MyCache<K, V extends Serializable> {
+    private Map<K, CacheElement> cache = new HashMap<>();
     private int maxSize;
     private CacheAlgorithm cacheAlgorithm;
 
@@ -16,71 +18,113 @@ public class MyCache<K, V> {
     }
 
     // LFU - Least-Frequently Used (возвращаем наименее часто используемый элемент кэша)
-    private K getLFU(){
+    private K getLFU() {
         K key = cache.keySet().iterator().next();
         int accessCounter = cache.get(key).getAccessCounter();
-        for (CacheElement<K,V> element : cache.values()){
-            if (element.getAccessCounter() < accessCounter){
+        for (Map.Entry<K, CacheElement> element : cache.entrySet()) {
+            if (element.getValue().getAccessCounter() < accessCounter) {
                 key = element.getKey();
-                accessCounter = element.getAccessCounter();
+                accessCounter = element.getValue().getAccessCounter();
             }
         }
-       return key;
+        return key;
     }
 
     // MFU - Most Frequently Used (возвращаем наиболее часто используемый элемент кэша)
-    private K getMFU(){
+    private K getMFU() {
         K key = cache.keySet().iterator().next();
         int accessCounter = cache.get(key).getAccessCounter();
-        for (CacheElement<K,V> element : cache.values()){
-            if (element.getAccessCounter() > accessCounter){
+        for (Map.Entry<K, CacheElement> element : cache.entrySet()) {
+            if (element.getValue().getAccessCounter() > accessCounter) {
                 key = element.getKey();
-                accessCounter = element.getAccessCounter();
+                accessCounter = element.getValue().getAccessCounter();
             }
         }
         return key;
     }
 
     //LRU - Least recently used (возвращаем неиспользованный дольше всех элемент кэша)
-    private K getLRU(){
+    private K getLRU() {
         K key = cache.keySet().iterator().next();
         long lastAccessTime = cache.get(key).getLastAccessTime();
-        for (CacheElement<K,V> element : cache.values()){
-            if (element.getLastAccessTime() < lastAccessTime){
+        for (Map.Entry<K, CacheElement> element : cache.entrySet()) {
+            if (element.getValue().getLastAccessTime() < lastAccessTime) {
                 key = element.getKey();
-                lastAccessTime = element.getLastAccessTime();
+                lastAccessTime = element.getValue().getLastAccessTime();
             }
         }
         return key;
     }
 
+    private String writeToFile(V value) {
+        Path tmpFile = null;
+        try {
+            tmpFile = Files.createTempFile( "", "");
+            tmpFile.toFile().deleteOnExit();
+        } catch (IOException e) {
+            System.out.println("Can't create file " + e.getMessage());
+        }
+        try (ObjectOutputStream outputStream = new ObjectOutputStream(new FileOutputStream(tmpFile.toFile()))) {
+            outputStream.writeObject(value);
+            outputStream.flush();
+        } catch (IOException e) {
+            System.out.println("Can't write an object to a file " + tmpFile.toFile().getName() + ": " + e.getMessage());
+        }
+        return tmpFile.toFile().getAbsolutePath();
+    }
+
     public void put(K key, V value) {
         // Если размер кэша достиг максимального, то предварительно удаляем старый элемент
         // в соответствии с выбранной стратегией
-        if (cache.size() == maxSize){
-            switch (cacheAlgorithm){
+        if (cache.size() == maxSize) {
+            K keyForRemove = null;
+            switch (cacheAlgorithm) {
                 case LFU:
-                    cache.remove(getLFU());
+                    keyForRemove = getLFU();
                     break;
                 case MFU:
-                    cache.remove(getMFU());
+                    keyForRemove = getMFU();
                     break;
                 case LRU:
-                    cache.remove(getLRU());
+                    keyForRemove = getLRU();
                     break;
             }
+            deleteFile(cache.get(keyForRemove).getFileName());
+            cache.remove(keyForRemove);
         }
-        cache.put(key, new CacheElement<>(key, value));
+        cache.put(key, new CacheElement(writeToFile(value)));
     }
 
-    public V get(K key){
-        CacheElement<K, V> cacheElement = cache.get(key);
-        cacheElement.setLastAccessTime();
-        cacheElement.setAccessCounter();
-        return cacheElement.getValue();
+    public V get(K key) {
+        if (cache.containsKey(key)) {
+            CacheElement cacheElement = cache.get(key);
+            cacheElement.setLastAccessTime();
+            cacheElement.setAccessCounter();
+            return readFromFile(cacheElement.getFileName());
+        }
+        return null;
     }
 
-    public void clear(){
+    private V readFromFile(String fileName) {
+        V value = null;
+        try (FileInputStream fileInputStream = new FileInputStream(new File(fileName));
+             ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)) {
+            value = (V) objectInputStream.readObject();
+        } catch (ClassNotFoundException | IOException e) {
+            System.out.println("Can't read a file." + e.getMessage());
+        }
+        return value;
+    }
+
+    private void deleteFile(String fileName) {
+        File file = new File(fileName);
+        file.delete();
+    }
+
+    public void clear() {
+        for (CacheElement element : cache.values()) {
+            deleteFile(element.getFileName());
+        }
         cache.clear();
     }
 

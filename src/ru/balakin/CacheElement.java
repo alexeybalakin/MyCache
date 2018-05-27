@@ -1,16 +1,13 @@
 package ru.balakin;
 
 
-public class CacheElement<K, V> {
-    private K key;
-    private V value;
+public class CacheElement {
+    private String fileName;
     private long lastAccessTime;
     private int accessCounter;
 
-
-    public CacheElement(K key, V value) {
-        this.key = key;
-        this.value = value;
+    public CacheElement(String fileName) {
+        this.fileName = fileName;
         this.lastAccessTime = getCurrentTime();
     }
 
@@ -18,12 +15,8 @@ public class CacheElement<K, V> {
         return System.currentTimeMillis();
     }
 
-    public K getKey() {
-        return key;
-    }
-
-    public V getValue() {
-        return value;
+    public String getFileName() {
+        return fileName;
     }
 
     public long getLastAccessTime() {
