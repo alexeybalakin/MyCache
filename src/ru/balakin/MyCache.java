@@ -1,8 +1,6 @@
 package ru.balakin;
 
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -57,20 +55,21 @@ public class MyCache<K, V extends Serializable> {
     }
 
     private String writeToFile(V value) {
-        Path tmpFile = null;
+
+        File tmpFile = null;
         try {
-            tmpFile = Files.createTempFile( "", "");
-            tmpFile.toFile().deleteOnExit();
+            tmpFile = File.createTempFile( "tmp", "");
+            tmpFile.deleteOnExit();
         } catch (IOException e) {
             System.out.println("Can't create file " + e.getMessage());
         }
-        try (ObjectOutputStream outputStream = new ObjectOutputStream(new FileOutputStream(tmpFile.toFile()))) {
+        try (ObjectOutputStream outputStream = new ObjectOutputStream(new FileOutputStream(tmpFile))) {
             outputStream.writeObject(value);
             outputStream.flush();
         } catch (IOException e) {
-            System.out.println("Can't write an object to a file " + tmpFile.toFile().getName() + ": " + e.getMessage());
+            System.out.println("Can't write an object to a file " + tmpFile.getName() + ": " + e.getMessage());
         }
-        return tmpFile.toFile().getAbsolutePath();
+        return tmpFile.getAbsolutePath();
     }
 
     public void put(K key, V value) {
